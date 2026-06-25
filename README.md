@@ -1,80 +1,110 @@
-# README, Part 1, nuScenes Data Annotator Pipeline
+# README, Part 1, Gemini Based nuScenes Data Annotator Pipeline
 
 ## Project Goal
 
 This repository implements Part 1 of the thesis pipeline.
 
-The goal of Part 1 is to build a data annotator pipeline for nuScenes that can:
+The goal is to build a Gemini based data annotator pipeline for nuScenes.
+
+The pipeline must:
 
 1. Load nuScenes scenes and camera images
 
-2. Mine scenes that are relevant to uncertainty, calibration, and abstention aware driving VQA
+2. Send nuScenes camera views to Gemini
 
-3. Classify each candidate scene into thesis relevant scenario clusters
+3. Produce structured scene descriptions
 
-4. Generate candidate VQA questions for each relevant scene
+4. Mine scenarios relevant to uncertainty, calibration, and abstention aware driving VQA
 
-5. Predict preliminary answerability labels automatically
+5. Classify each scene into thesis specific scenario clusters
 
-6. Provide a GUI for human correction and verification
+6. Generate candidate VQA questions
 
-7. Export around 100 human verified ground truth samples for Part 2, the VQA evaluation pipeline
+7. Predict answerability labels
 
-Part 1 does not evaluate VLM performance yet. It only creates the verified benchmark subset that Part 2 will use.
+8. Create candidate records for human review
 
-## Conceptual Background
+9. Provide a GUI for correcting and verifying labels
 
-This annotator pipeline is inspired by SAVANT style annotation infrastructure.
+10. Export 100 human verified ground truth VQA samples for Part 2
 
-The important idea is:
+Part 1 does not evaluate VLM performance yet.
 
-Do not ask a VLM one naive question such as, is this scene relevant?
+Part 1 creates the verified dataset that Part 2 will use.
 
-Instead, use a structured multi step pipeline:
+## Important Design Decision
 
-1. Extract a layered scene description
+This implementation starts with Gemini immediately.
 
-2. Classify uncertainty relevant scenarios
+There is no rule based annotator.
 
-3. Generate candidate questions
+There is no mock implementation.
 
-4. Decide whether each question is answerable, unanswerable, or ambiguous
+All automatic annotation stages use real Gemini calls.
 
-5. Let a human verify the result in a GUI
+The human GUI remains the final authority.
 
-The final output is a high quality JSONL ground truth dataset.
+Gemini creates suggestions.
 
-## Dataset
+The human corrects and verifies the final labels.
 
-The implementation uses nuScenes.
+## Thesis Context
 
-The first implementation should support:
+The thesis topic is:
 
-1. `v1.0-mini`
+Uncertainty, Calibration, and Abstention Aware Vision Language Models for Safe Autonomous Driving
 
-2. `v1.0-trainval`
+The Part 1 annotator must find scenes that can test whether a VLM should:
 
-Recommended development order:
+1. Answer confidently
 
-1. Start with `v1.0-mini`
+2. Lower its confidence
 
-2. Implement and debug all logic on a small subset
+3. Say cannot determine
 
-3. Only then run the pipeline on larger nuScenes splits
+4. Abstain because evidence is missing
 
-## What Part 1 Must Produce
+5. Recommend safer behavior such as slow down or stop
 
-The main output is:
+## High Level Architecture
 
-```text
+```text id="boqvio"
+nuScenes dataset
+    ↓
+nuScenes loader
+    ↓
+camera image extraction
+    ↓
+Gemini client
+    ↓
+layered scene description
+    ↓
+scenario classification
+    ↓
+question generation
+    ↓
+answerability classification
+    ↓
+candidate ranking
+    ↓
+GUI human verification
+    ↓
+verified ground truth JSONL
+```
+
+## Output Of Part 1
+
+The final output is:
+
+```text id="emy4se"
 outputs/verified/ground_truth_100.jsonl
 ```
 
-Each line must contain one verified VQA sample.
+Each line contains one human verified VQA sample.
 
 Example:
 
-```json
+```json id="vnl8hj"
 {
   "sample_id": "sample_token_here",
   "scene_token": "scene_token_here",
@@ -105,9 +135,9 @@ Example:
 
 ## Main Scenario Clusters
 
-The annotator must classify samples into the following scenario clusters.
+The annotator must classify samples into these clusters.
 
-### 1. normal_answerable_control
+### normal_answerable_control
 
 Clear scene where the question can be answered from visible evidence.
 
@@ -115,7 +145,7 @@ Examples:
 
 1. Clear vehicle ahead
 
-2. Clear pedestrian crossing
+2. Clear pedestrian
 
 3. Clear lane marking
 
@@ -125,7 +155,7 @@ Purpose:
 
 These samples prevent the benchmark from becoming only a refusal dataset.
 
-### 2. object_occlusion
+### object_occlusion
 
 A relevant object is partly or fully hidden.
 
@@ -137,13 +167,13 @@ Examples:
 
 3. Vehicle partly hidden at intersection
 
-4. Object only partially inside camera frame
+4. Object partly outside the camera frame
 
 Purpose:
 
 Tests whether the VLM refuses to answer when visual evidence is incomplete.
 
-### 3. traffic_light_or_sign_occlusion
+### traffic_light_or_sign_occlusion
 
 Traffic light or road sign is hidden, unreadable, too small, or ambiguous.
 
@@ -153,15 +183,15 @@ Examples:
 
 2. Sign too far away to read
 
-3. Traffic sign partially blocked
+3. Sign partly blocked
 
 Purpose:
 
 Tests infrastructure related perception uncertainty.
 
-### 4. sensor_degradation
+### sensor_degradation
 
-Image quality is reduced.
+Image quality is poor.
 
 Examples:
 
@@ -179,9 +209,9 @@ Examples:
 
 Purpose:
 
-Tests whether confidence decreases when the input quality decreases.
+Tests whether confidence should decrease when visual quality is poor.
 
-### 5. ambiguous_agent_intent
+### ambiguous_agent_intent
 
 The object is visible but future intent is uncertain.
 
@@ -193,15 +223,15 @@ Examples:
 
 3. Vehicle waiting at intersection
 
-4. Car may merge but intention is unclear
+4. Vehicle may merge but intention is unclear
 
 Purpose:
 
-Tests reasoning uncertainty, not just perception uncertainty.
+Tests reasoning uncertainty.
 
-### 6. planning_under_occlusion
+### planning_under_occlusion
 
-The ego vehicle may need to make a decision while important regions are blocked.
+The ego vehicle may need to act while important regions are blocked.
 
 Examples:
 
@@ -217,9 +247,9 @@ Purpose:
 
 Connects missing evidence to safe behavior.
 
-### 7. risk_under_incomplete_evidence
+### risk_under_incomplete_evidence
 
-The scene may be safety critical, but the available evidence is incomplete.
+The scene may be safety critical, but evidence is incomplete.
 
 Examples:
 
@@ -235,25 +265,25 @@ Purpose:
 
 Tests uncertainty aware risk assessment.
 
-### 8. multi_view_required
+### multi_view_required
 
-The question cannot be answered from a single front camera view but may be answerable from multiple nuScenes camera views.
+The question cannot be answered from one camera view, but may be answerable from multiple nuScenes camera views.
 
 Examples:
 
 1. Vehicle approaching from side
 
-2. Pedestrian visible in front left camera but not front camera
+2. Pedestrian visible in front left view but not front view
 
 3. Object behind ego vehicle
 
 Purpose:
 
-Tests whether the pipeline can identify when multiple camera views are required.
+Tests whether multiple camera views are needed.
 
-### 9. not_relevant
+### not_relevant
 
-Scene does not help the thesis topic.
+The scene does not help the thesis topic.
 
 Examples:
 
@@ -271,11 +301,11 @@ Filter out unhelpful samples.
 
 ## Answerability Labels
 
-Every generated question must receive one answerability label.
+Each generated question must receive one answerability label.
 
 ### answerable
 
-The available image evidence is enough to answer the question.
+The available visual evidence is enough to answer.
 
 Example:
 
@@ -285,7 +315,7 @@ Is there a vehicle ahead?
 
 Evidence:
 
-Vehicle is clearly visible in ego lane.
+Vehicle is clearly visible in the ego lane.
 
 Ground truth answer:
 
@@ -329,11 +359,11 @@ Cannot determine future intent from the available image.
 
 ## Recommended Safety Actions
 
-Every verified sample should also contain a recommended action.
+Every verified sample should contain one recommended action.
 
 Allowed values:
 
-```python
+```python id="ajlo84"
 SAFETY_ACTIONS = [
     "proceed",
     "slow_down",
@@ -342,45 +372,55 @@ SAFETY_ACTIONS = [
 ]
 ```
 
-Use simple rules first:
+Suggested semantics:
 
-1. Clear and answerable scene, use `proceed`
+1. Use `proceed` for clear answerable scenes with no special uncertainty
 
-2. Uncertain but not immediately dangerous, use `slow_down`
+2. Use `slow_down` for uncertain but not immediate conflict scenes
 
-3. Uncertain and conflict area ahead, use `stop_or_wait`
+3. Use `stop_or_wait` for uncertainty in a conflict area
 
-4. Severe uncertainty in safety critical context, use `minimal_risk_response`
+4. Use `minimal_risk_response` for severe uncertainty in a safety critical context
 
 ## Repository Structure
 
-Create the repository with this structure.
+Create this structure.
 
-```text
+```text id="4e9kld"
 data_annotator/
     README.md
     requirements.txt
     configs/
-        default.yaml
         nuscenes_mini.yaml
         nuscenes_trainval.yaml
     src/
         main.py
+        config.py
         nuscenes_loader.py
         scene_indexer.py
         image_exporter.py
-        layered_descriptor.py
-        scenario_classifier.py
-        question_generator.py
-        answerability_classifier.py
-        candidate_ranker.py
         schema.py
         storage.py
+        candidate_ranker.py
+        reporting.py
+        llm/
+            gemini_client.py
+            gemini_types.py
+            prompt_cache.py
+            rate_limiter.py
+            retry.py
+            image_payload.py
+        annotator/
+            layered_descriptor.py
+            scenario_classifier.py
+            question_generator.py
+            answerability_classifier.py
+            candidate_builder.py
         prompts/
-            scene_description_prompts.py
-            scenario_prompts.py
-            question_prompts.py
-            answerability_prompts.py
+            layered_scene_prompt.py
+            scenario_prompt.py
+            question_generation_prompt.py
+            answerability_prompt.py
         gui/
             app.py
             widgets.py
@@ -389,64 +429,121 @@ data_annotator/
             image_utils.py
             json_utils.py
             logging_utils.py
+            hash_utils.py
     outputs/
         cache/
+            llm/
+            previews/
         candidates/
         verified/
         reports/
     tests/
         test_schema.py
-        test_candidate_ranker.py
         test_storage.py
+        test_candidate_ranker.py
+        test_cache_key.py
 ```
 
-## Phase 0, Environment Setup
+## Environment Variables
+
+The Gemini API key must be loaded from the environment.
+
+Do not commit API keys to Git.
+
+Required environment variable:
+
+```text id="ylv09b"
+GEMINI_API_KEY
+```
+
+Optional environment variable:
+
+```text id="5ipy6g"
+GEMINI_MODEL_NAME
+```
+
+Default model name should be set in config.
+
+The code must fail clearly if the API key is missing.
+
+## Config Example
+
+```yaml id="qb9gbn"
+dataset:
+  name: nuscenes
+  dataroot: C:/datasets/nuscenes
+  version: v1.0_mini
+
+pipeline:
+  max_samples: 100
+  sample_stride: 1
+  target_verified_count: 100
+  max_questions_per_sample: 3
+  max_candidates_for_gui: 300
+
+gemini:
+  api_key_env: GEMINI_API_KEY
+  model_name_env: GEMINI_MODEL_NAME
+  default_model_name: gemini_model_name_here
+  max_calls_per_run: 50
+  request_timeout_seconds: 60
+  max_retries: 3
+  retry_backoff_seconds: 5
+  cache_enabled: true
+  cache_dir: outputs/cache/llm
+  use_structured_output: true
+  image_input_mode: inline
+  max_images_per_request: 6
+  max_image_side_pixels: 1280
+
+paths:
+  sample_index_path: outputs/cache/nuscenes_sample_index.jsonl
+  preview_dir: outputs/cache/previews
+  auto_candidates_path: outputs/candidates/auto_candidates.jsonl
+  verified_output_path: outputs/verified/ground_truth_100.jsonl
+  rejected_output_path: outputs/verified/rejected_samples.jsonl
+  report_dir: outputs/reports
+
+gui:
+  default_camera: CAM_FRONT
+  show_multiview_grid: true
+```
+
+Note:
+
+Use the exact nuScenes version string expected by the devkit in the actual code.
+
+## Phase 0, Project Setup
 
 Goal:
 
-Create the minimal environment so the nuScenes devkit can load the dataset.
+Create the minimal repository and dependency setup.
 
 Tasks:
 
-1. Create a Python virtual environment
+1. Create the folder structure
 
-2. Install dependencies
+2. Create config loader
 
-3. Add `requirements.txt`
+3. Create logging utilities
 
-4. Verify that nuScenes can be loaded
+4. Add environment variable loading for Gemini
 
-Required dependencies:
+5. Add basic JSON storage helpers
 
-```text
-nuscenes-devkit
-numpy
-pandas
-pillow
-opencv-python
-pydantic
-pyyaml
-tqdm
-streamlit
-```
-
-Optional later dependencies:
-
-```text
-openai
-transformers
-torch
-accelerate
-qwen-vl-utils
-```
+6. Add minimal tests for storage and config
 
 Acceptance criteria:
 
-1. Running `python src/main.py --config configs/nuscenes_mini.yaml --stage smoke_test` loads nuScenes without error
+1. Config file loads successfully
 
-2. The script prints the number of scenes and samples
+2. Output folders are created automatically
 
-3. The script can access at least `CAM_FRONT`
+3. Missing Gemini API key creates a clear error
+
+4. JSON and JSONL save and load work
+
+5. Basic tests pass
 
 ## Phase 1, nuScenes Loader
 
@@ -456,13 +553,13 @@ Implement a clean wrapper around the nuScenes devkit.
 
 File:
 
-```text
+```text id="w4r41k"
 src/nuscenes_loader.py
 ```
 
 Required class:
 
-```python
+```python id="sckzcv"
 class NuScenesLoader:
     def __init__(self, dataroot: str, version: str):
         pass
@@ -486,9 +583,9 @@ class NuScenesLoader:
         pass
 ```
 
-Expected camera keys:
+Expected camera names:
 
-```python
+```python id="cshb76"
 CAMERA_NAMES = [
     "CAM_FRONT",
     "CAM_FRONT_LEFT",
@@ -505,42 +602,44 @@ Acceptance criteria:
 
 2. Loader returns annotation records for a sample
 
-3. Loader works on `v1.0-mini`
+3. Loader works on nuScenes mini
 
-4. Loader does not crash if one camera path is missing, it should mark it as missing in the sample record
+4. Loader handles missing camera files by storing missing status
+
+5. Loader does not call Gemini
 
 ## Phase 2, Scene Indexing
 
 Goal:
 
-Create a lightweight index of nuScenes samples so later stages do not repeatedly query the devkit.
+Create a lightweight index of nuScenes samples.
 
 File:
 
-```text
+```text id="z7ktfp"
 src/scene_indexer.py
 ```
 
 Output:
 
-```text
+```text id="6si7zi"
 outputs/cache/nuscenes_sample_index.jsonl
 ```
 
-Each index record:
+Each record:
 
-```json
+```json id="qg86g8"
 {
   "sample_id": "sample_token",
   "scene_token": "scene_token",
   "timestamp": 123456789,
   "camera_paths": {
-    "CAM_FRONT": "...",
-    "CAM_FRONT_LEFT": "...",
-    "CAM_FRONT_RIGHT": "...",
-    "CAM_BACK": "...",
-    "CAM_BACK_LEFT": "...",
-    "CAM_BACK_RIGHT": "..."
+    "CAM_FRONT": "path",
+    "CAM_FRONT_LEFT": "path",
+    "CAM_FRONT_RIGHT": "path",
+    "CAM_BACK": "path",
+    "CAM_BACK_LEFT": "path",
+    "CAM_BACK_RIGHT": "path"
   },
   "num_annotations": 12,
   "annotation_categories": [
@@ -555,75 +654,79 @@ Acceptance criteria:
 
 1. Index can be generated with one command
 
-2. Index can be loaded without nuScenes devkit
+2. Index can be loaded without repeatedly querying nuScenes
 
-3. Index contains camera paths and high level annotation category counts
+3. Index contains camera paths
 
-4. Index supports selecting only every Nth sample to reduce processing time
+4. Index contains annotation category counts
 
-## Phase 3, Image Export and Preview
+5. Index supports `max_samples`
+
+6. Index supports `sample_stride`
+
+## Phase 3, Image Preview Preparation
 
 Goal:
 
-Create image previews for GUI and VLM prompting.
+Prepare images for Gemini and GUI.
 
 File:
 
-```text
+```text id="uiwgbu"
 src/image_exporter.py
 ```
 
 Tasks:
 
-1. Copy or reference raw camera images
+1. Load nuScenes camera images
 
-2. Create resized preview images
+2. Resize images for Gemini request size control
 
-3. Optionally create a six camera grid image
+3. Save preview images
 
-4. Store all generated preview paths in the candidate record
+4. Create a six camera grid image for the GUI
 
-Output:
-
-```text
-outputs/cache/previews/
-```
+5. Keep original image paths for traceability
 
 Functions:
 
-```python
-def create_camera_preview(camera_paths: dict, output_dir: str) -> dict:
+```python id="vwqt5y"
+def create_camera_previews(camera_paths: dict, output_dir: str, max_side_pixels: int) -> dict:
     pass
 
-def create_multiview_grid(camera_paths: dict, output_path: str) -> str:
+def create_multiview_grid(preview_paths: dict, output_path: str) -> str:
     pass
 ```
 
 Acceptance criteria:
 
-1. GUI can display individual camera images
+1. Preview images are generated
 
-2. GUI can display a combined six camera overview image
+2. Six camera grid is generated
 
-3. Preview generation is cached
+3. Image processing is cached
+
+4. Original image paths are preserved
+
+5. Preview paths are stored in candidate records
 
 ## Phase 4, Data Schema
 
 Goal:
 
-Define strict Python data models for the pipeline.
+Create strict data models for all intermediate and final records.
 
 File:
 
-```text
+```text id="xz6jxd"
 src/schema.py
 ```
 
-Use Pydantic or dataclasses.
+Use Pydantic.
 
 Required models:
 
-```python
+```python id="4q29l9"
 class SceneIndexRecord:
     sample_id: str
     scene_token: str
@@ -632,6 +735,15 @@ class SceneIndexRecord:
     num_annotations: int
     annotation_categories: list
     scene_description: str | None
+
+class GeminiCallRecord:
+    sample_id: str
+    prompt_name: str
+    prompt_version: str
+    model_name: str
+    cache_key: str
+    response_json: dict
+    raw_text: str | None
 
 class LayeredSceneDescription:
     street: dict
@@ -674,247 +786,475 @@ class CandidateRecord:
     question: str
     answerability_label: AnswerabilityLabel
     priority_score: float
+    source_model_name: str
     human_verified: bool
     human_notes: str | None
 ```
 
 Acceptance criteria:
 
-1. Every candidate can be serialized to JSON
+1. Every model validates input
 
-2. Every candidate can be loaded from JSON
+2. Invalid labels raise clear errors
 
-3. Invalid labels raise clear errors
+3. Every record can be serialized to JSON
 
-## Phase 5, Layered Scene Description
+4. Every record can be loaded from JSON
+
+5. Tests cover invalid answerability and invalid safety action
+
+## Phase 5, Gemini Client Layer
 
 Goal:
 
-Generate a structured description of each scene.
+Create the Gemini client before implementing any annotation logic.
+
+All VLM calls must go through this layer.
 
 File:
 
-```text
-src/layered_descriptor.py
+```text id="pc401m"
+src/llm/gemini_client.py
 ```
 
-This phase can first use simple rule based and annotation based logic. Later it can use a VLM.
+Required class:
 
-Inputs:
+```python id="6jlvef"
+class GeminiClient:
+    def __init__(
+        self,
+        api_key: str,
+        model_name: str,
+        cache,
+        rate_limiter,
+        config,
+    ):
+        pass
 
-1. Camera images
+    def generate_json(
+        self,
+        prompt: str,
+        schema: dict,
+        image_paths: list[str],
+        cache_key: str,
+    ) -> dict:
+        pass
+```
 
-2. nuScenes annotation categories
+Requirements:
 
-3. Optional map or metadata
+1. Read API key from environment
 
-Output:
+2. Support multiple image paths
 
-```json
+3. Support structured JSON output
+
+4. Validate response against the provided schema
+
+5. Cache every response
+
+6. Retry failed calls
+
+7. Enforce maximum calls per run
+
+8. Log every call
+
+9. Never expose the API key in logs
+
+Acceptance criteria:
+
+1. One real Gemini call works on one nuScenes image
+
+2. The result is valid JSON
+
+3. The result is cached
+
+4. A repeated call reads from cache
+
+5. The call counter works
+
+6. The pipeline stops if `max_calls_per_run` is reached
+
+## IGNORE Phase 6, Prompt Cache
+
+Goal:
+
+Avoid paying for repeated identical Gemini calls.
+
+File:
+
+```text id="9c0r2n"
+src/llm/prompt_cache.py
+```
+
+Cache key must include:
+
+1. Sample ID
+
+2. Prompt name
+
+3. Prompt version
+
+4. Model name
+
+5. Image hashes
+
+6. Schema version
+
+7. Question text if applicable
+
+Functions:
+
+```python id="qdogrh"
+def build_cache_key(
+    sample_id: str,
+    prompt_name: str,
+    prompt_version: str,
+    model_name: str,
+    image_paths: list[str],
+    schema_version: str,
+    question: str | None = None,
+) -> str:
+    pass
+
+def read_cache(cache_key: str, cache_dir: str) -> dict | None:
+    pass
+
+def write_cache(cache_key: str, cache_dir: str, response: dict) -> None:
+    pass
+```
+
+Acceptance criteria:
+
+1. Same input produces same cache key
+
+2. Different prompt version produces different cache key
+
+3. Different question produces different cache key
+
+4. Cached response is reused
+
+## Phase 7, Rate Limiter And Retry
+
+Goal:
+
+Make Gemini calls safe and controlled.
+
+Files:
+
+```text id="xl4d5g"
+src/llm/rate_limiter.py
+src/llm/retry.py
+```
+
+Required logic:
+
+```python id="m9ikuk"
+class RateLimiter:
+    def __init__(self, min_seconds_between_calls: float):
+        pass
+
+    def wait(self):
+        pass
+```
+
+```python id="6yizsn"
+def call_with_retry(fn, max_retries: int, backoff_seconds: float):
+    pass
+```
+
+Acceptance criteria:
+
+1. Calls are spaced by the configured delay
+
+2. Failed calls are retried
+
+3. Final failure is logged clearly
+
+4. Retry does not hide invalid JSON errors
+
+## Phase 8, Prompt Definitions
+
+Goal:
+
+Create versioned prompts for all Gemini tasks.
+
+Folder:
+
+```text id="y63cax"
+src/prompts/
+```
+
+Required prompt files:
+
+```text id="9icft9"
+layered_scene_prompt.py
+scenario_prompt.py
+question_generation_prompt.py
+answerability_prompt.py
+```
+
+Each prompt file must define:
+
+1. Prompt name
+
+2. Prompt version
+
+3. Prompt builder function
+
+4. Output schema
+
+5. Few shot examples
+
+No unstructured free text output is allowed.
+
+All Gemini outputs must be JSON.
+
+## Phase 9, Layered Scene Description With Gemini
+
+Goal:
+
+Ask Gemini to describe each nuScenes sample using structured semantic layers.
+
+File:
+
+```text id="4hhsbe"
+src/annotator/layered_descriptor.py
+```
+
+Function:
+
+```python id="rlcnny"
+def describe_scene_with_gemini(
+    sample_record: SceneIndexRecord,
+    preview_paths: dict,
+    gemini_client: GeminiClient,
+    config,
+) -> LayeredSceneDescription:
+    pass
+```
+
+Gemini prompt must ask for these layers:
+
+1. Street
+
+2. Infrastructure
+
+3. Movable objects
+
+4. Environment
+
+5. Uncertainty
+
+Output schema:
+
+```json id="8yu1vi"
 {
   "street": {
-    "lanes_visible": true,
-    "crosswalk_visible": false,
-    "road_geometry": "intersection"
+    "road_layout": "string",
+    "lanes_visible": "string",
+    "crosswalk_visible": "string",
+    "occluded_regions": ["string"]
   },
   "infrastructure": {
-    "traffic_light_visible": "unknown",
-    "traffic_sign_visible": "unknown",
-    "construction_elements": []
+    "traffic_lights": ["string"],
+    "traffic_signs": ["string"],
+    "barriers_or_construction": ["string"],
+    "visibility_issues": ["string"]
   },
   "movable_objects": {
-    "vehicles": 5,
-    "pedestrians": 1,
-    "cyclists": 0,
-    "occlusion_indicators": []
+    "vehicles": ["string"],
+    "pedestrians": ["string"],
+    "cyclists": ["string"],
+    "ambiguous_intentions": ["string"]
   },
   "environment": {
-    "lighting": "unknown",
-    "weather": "unknown",
-    "visibility": "unknown"
+    "weather": "string",
+    "lighting": "string",
+    "visibility": "string",
+    "image_quality_issues": ["string"]
   },
   "uncertainty": {
     "possible_occlusion": true,
-    "possible_ambiguous_intent": false,
-    "possible_sensor_degradation": false
+    "possible_sensor_degradation": true,
+    "possible_ambiguous_intent": true,
+    "multi_view_needed": true,
+    "uncertainty_reason": "string"
   }
 }
 ```
 
-Implementation stages:
-
-1. `mode = "metadata_only"`
-
-2. `mode = "vlm"`
-
-3. `mode = "hybrid"`
-
 Acceptance criteria:
 
-1. Metadata only mode works without API keys
+1. Gemini receives up to six camera views
 
-2. VLM mode accepts a pluggable model interface
+2. Gemini returns valid layered JSON
 
-3. Description output is always valid JSON
+3. Output validates as `LayeredSceneDescription`
 
-## Phase 6, Scenario Classification
+4. Result is cached
+
+5. Result is saved for later stages
+
+## Phase 10, Scenario Classification With Gemini
 
 Goal:
 
-Classify whether a sample is relevant to the thesis topic.
+Classify whether a scene is relevant to the thesis.
 
 File:
 
-```text
-src/scenario_classifier.py
+```text id="5x88cs"
+src/annotator/scenario_classifier.py
 ```
 
 Function:
 
-```python
-def classify_scenario(record: SceneIndexRecord, description: LayeredSceneDescription) -> ScenarioClassification:
+```python id="y2m8xf"
+def classify_scenario_with_gemini(
+    sample_record: SceneIndexRecord,
+    description: LayeredSceneDescription,
+    preview_paths: dict,
+    gemini_client: GeminiClient,
+    config,
+) -> ScenarioClassification:
     pass
 ```
 
-Initial implementation:
+Allowed scenario clusters:
 
-Use rules based on annotation categories and description fields.
+```python id="crb50a"
+SCENARIO_CLUSTERS = [
+    "normal_answerable_control",
+    "object_occlusion",
+    "traffic_light_or_sign_occlusion",
+    "sensor_degradation",
+    "ambiguous_agent_intent",
+    "planning_under_occlusion",
+    "risk_under_incomplete_evidence",
+    "multi_view_required",
+    "not_relevant"
+]
+```
 
-Example rules:
+Output schema:
 
-1. If pedestrians or cyclists exist, candidate for `ambiguous_agent_intent`
-
-2. If many vehicles exist near intersection, candidate for `planning_under_occlusion`
-
-3. If camera image quality is poor, candidate for `sensor_degradation`
-
-4. If normal objects are clearly visible and no uncertainty indicators exist, candidate for `normal_answerable_control`
-
-5. Otherwise mark as `not_relevant`
-
-Later implementation:
-
-Use VLM few shot classification.
+```json id="si5nh5"
+{
+  "is_relevant": true,
+  "scenario_clusters": ["object_occlusion"],
+  "task_layer": "perception",
+  "uncertainty_sources": ["occlusion"],
+  "safety_relevance": "The scene may require abstention because the object is partly hidden.",
+  "reason": "string"
+}
+```
 
 Acceptance criteria:
 
-1. Classifier outputs at least one scenario cluster
+1. Gemini receives images and layered description
 
-2. Classifier marks irrelevant scenes
+2. Gemini outputs at least one scenario cluster
 
-3. Classifier gives a reason string
+3. `not_relevant` samples are allowed
 
-4. Classifier can be switched between `rule_based` and `vlm`
+4. Result validates as `ScenarioClassification`
 
-## Phase 7, Question Generation
+5. Result is cached
+
+## Phase 11, Question Generation With Gemini
 
 Goal:
 
-Generate candidate VQA questions for each relevant sample.
+Generate VQA questions for each relevant sample.
 
 File:
 
-```text
-src/question_generator.py
+```text id="42e8ff"
+src/annotator/question_generator.py
 ```
 
 Function:
 
-```python
-def generate_questions(description: LayeredSceneDescription, scenario: ScenarioClassification) -> list[CandidateQuestion]:
+```python id="9n8z3s"
+def generate_questions_with_gemini(
+    sample_record: SceneIndexRecord,
+    description: LayeredSceneDescription,
+    scenario: ScenarioClassification,
+    preview_paths: dict,
+    gemini_client: GeminiClient,
+    config,
+) -> list[CandidateQuestion]:
     pass
 ```
 
-Question templates:
+Instruction to Gemini:
 
-For `normal_answerable_control`:
+Generate questions that test whether a VLM should answer or abstain.
 
-```text
-Is there a vehicle ahead of the ego vehicle?
-Is there a pedestrian visible in the scene?
-Is the road ahead visible?
-```
+Each question must be linked to a scenario cluster and task layer.
 
-For `object_occlusion`:
+Do not generate vague questions.
 
-```text
-Is the partially hidden object a pedestrian, cyclist, or vehicle?
-Is there a pedestrian in the ego path?
-Can the hidden object be identified from the available image?
-```
+Do not generate questions that require information outside the images unless the correct label is intended to be unanswerable or ambiguous.
 
-For `traffic_light_or_sign_occlusion`:
+Output schema:
 
-```text
-What color is the traffic light controlling the ego lane?
-Is the traffic sign readable?
-Should the ego vehicle obey the visible traffic signal?
-```
-
-For `sensor_degradation`:
-
-```text
-Is the object ahead clearly identifiable?
-Are the lane markings clearly visible?
-Is the scene clear enough to determine the road layout?
-```
-
-For `ambiguous_agent_intent`:
-
-```text
-Will the pedestrian cross the road?
-Is the cyclist likely to enter the ego lane?
-Will the vehicle merge into the ego lane?
-```
-
-For `planning_under_occlusion`:
-
-```text
-Can the ego vehicle safely proceed?
-Is there hidden cross traffic?
-Should the ego vehicle slow down because of limited visibility?
-```
-
-For `risk_under_incomplete_evidence`:
-
-```text
-Is this scene safety critical?
-What is the safest action for the ego vehicle?
-Is there enough evidence to proceed normally?
+```json id="7u9al1"
+{
+  "questions": [
+    {
+      "question": "What color is the traffic light controlling the ego lane?",
+      "target_object": "traffic light",
+      "task_layer": "infrastructure",
+      "expected_answerability": "unanswerable"
+    }
+  ]
+}
 ```
 
 Acceptance criteria:
 
-1. Each relevant candidate gets one to three questions
+1. Gemini generates one to three questions per relevant sample
 
-2. Questions are not duplicates
+2. Questions are specific
 
-3. Questions are linked to scenario cluster and task layer
+3. Duplicates are removed
 
-4. Questions are saved before answerability labeling
+4. Questions validate as `CandidateQuestion`
 
-## Phase 8, Answerability Classification
+5. Question generation is cached
+
+## Phase 12, Answerability Classification With Gemini
 
 Goal:
 
-Automatically propose answerability labels for each candidate question.
+For each candidate question, ask Gemini to propose the ground truth label.
 
 File:
 
-```text
-src/answerability_classifier.py
+```text id="n4qb7i"
+src/annotator/answerability_classifier.py
 ```
 
 Function:
 
-```python
-def classify_answerability(candidate: CandidateRecord) -> AnswerabilityLabel:
+```python id="772mjn"
+def classify_answerability_with_gemini(
+    sample_record: SceneIndexRecord,
+    description: LayeredSceneDescription,
+    scenario: ScenarioClassification,
+    question: CandidateQuestion,
+    preview_paths: dict,
+    gemini_client: GeminiClient,
+    config,
+) -> AnswerabilityLabel:
     pass
 ```
 
 Allowed answerability values:
 
-```python
+```python id="23uh2q"
 ANSWERABILITY_LABELS = [
     "answerable",
     "unanswerable",
@@ -924,7 +1264,7 @@ ANSWERABILITY_LABELS = [
 
 Allowed uncertainty sources:
 
-```python
+```python id="a8ljlb"
 UNCERTAINTY_SOURCES = [
     "occlusion",
     "sensor_degradation",
@@ -936,207 +1276,379 @@ UNCERTAINTY_SOURCES = [
 ]
 ```
 
-Rules for first implementation:
+Output schema:
 
-1. If question asks about future intention, default to `ambiguous`
-
-2. If question asks about a visible count or visible object presence, default to `answerable`
-
-3. If question asks about hidden or unreadable infrastructure, default to `unanswerable`
-
-4. If scene has sensor degradation and question needs fine visual detail, default to `unanswerable` or `ambiguous`
-
-5. If question asks if ego vehicle can safely proceed and there is occlusion, default to `ambiguous`
+```json id="d4ac3d"
+{
+  "answerability": "unanswerable",
+  "ground_truth_answer": "Cannot determine from the available visual evidence.",
+  "abstention_required": true,
+  "visible_evidence": "A large vehicle is visible near the intersection.",
+  "missing_evidence": "The traffic light state is not visible.",
+  "uncertainty_source": "occlusion",
+  "recommended_action": "slow_down",
+  "rationale": "The required traffic light color is not visible, so the model should not guess."
+}
+```
 
 Acceptance criteria:
 
-1. Every candidate question receives an answerability label
+1. Each question receives one answerability label
 
-2. Every label includes ground truth answer proposal
+2. Label validates as `AnswerabilityLabel`
 
-3. Every label includes abstention required boolean
+3. Ground truth answer is never empty
 
-4. Every label includes visible evidence and missing evidence strings
+4. Abstention boolean matches answerability
 
-5. Every label includes recommended action
+5. Result is cached
 
-## Phase 9, Candidate Ranking and Sampling
+## Phase 13, Candidate Builder
 
 Goal:
 
-Rank candidates so the GUI shows the most useful samples first.
+Combine all outputs into candidate records.
 
 File:
 
-```text
+```text id="x2caxq"
+src/annotator/candidate_builder.py
+```
+
+Function:
+
+```python id="5nfxnq"
+def build_candidate_records(
+    sample_record: SceneIndexRecord,
+    preview_paths: dict,
+    description: LayeredSceneDescription,
+    scenario: ScenarioClassification,
+    questions: list[CandidateQuestion],
+    answerability_labels: list[AnswerabilityLabel],
+    model_name: str,
+) -> list[CandidateRecord]:
+    pass
+```
+
+Acceptance criteria:
+
+1. Each question becomes one candidate record
+
+2. Each candidate has one answerability label
+
+3. Each candidate stores Gemini model name
+
+4. Each candidate stores camera paths and preview paths
+
+5. Candidates validate before saving
+
+## Phase 14, Candidate Ranking
+
+Goal:
+
+Rank candidates so the GUI shows useful samples first.
+
+File:
+
+```text id="m0n07e"
 src/candidate_ranker.py
 ```
 
 Function:
 
-```python
+```python id="b6tqdj"
 def compute_priority(candidate: CandidateRecord) -> float:
     pass
 ```
 
 Scoring rules:
 
-```python
+```python id="t1d5a9"
 score = 0
 
-if answerability == "unanswerable":
+if candidate.answerability_label.answerability == "unanswerable":
     score += 4
 
-if answerability == "ambiguous":
+if candidate.answerability_label.answerability == "ambiguous":
     score += 3
 
-if recommended_action == "slow_down":
+if candidate.answerability_label.recommended_action == "slow_down":
     score += 2
 
-if recommended_action == "stop_or_wait":
+if candidate.answerability_label.recommended_action == "stop_or_wait":
     score += 3
 
-if recommended_action == "minimal_risk_response":
+if candidate.answerability_label.recommended_action == "minimal_risk_response":
     score += 4
 
-if scenario_cluster == "normal_answerable_control":
+if "multi_view_required" in candidate.scenario_classification.scenario_clusters:
+    score += 2
+
+if "normal_answerable_control" in candidate.scenario_classification.scenario_clusters:
     score += 1
-
-if scenario_cluster == "multi_view_required":
-    score += 2
-
-if sample_is_duplicate:
-    score -= 5
 ```
 
-Target distribution for first 100 verified samples:
+Target distribution for 100 verified samples:
 
-```text
-20 normal_answerable_control
-20 object_occlusion or traffic_light_or_sign_occlusion
-15 sensor_degradation
-15 ambiguous_agent_intent
-15 planning_under_occlusion
-15 risk_under_incomplete_evidence or multi_view_required
+```text id="nho04j"
+20 normal answerable control
+20 object occlusion or traffic light or sign occlusion
+15 sensor degradation
+15 ambiguous agent intent
+15 planning under occlusion
+15 risk under incomplete evidence or multi view required
 ```
 
 Acceptance criteria:
 
-1. Candidate list is sorted by priority
+1. Candidate records get priority scores
 
-2. Duplicate scenes are reduced
+2. Candidate list is sorted by score
 
-3. GUI can filter by scenario cluster
+3. Duplicate sample and question pairs are removed
 
-4. Export includes the top candidates and their scores
+4. Ranked candidates are saved to JSONL
 
-## Phase 10, Storage Layer
+## Phase 15, Main Auto Annotation Pipeline
 
 Goal:
 
-Implement robust saving and loading.
+Run the full Gemini based auto annotation pipeline.
 
 File:
 
-```text
-src/storage.py
+```text id="3a1e2y"
+src/main.py
 ```
 
-Files to support:
+Pseudocode:
 
-```text
-outputs/cache/nuscenes_sample_index.jsonl
-outputs/candidates/auto_candidates.jsonl
-outputs/verified/ground_truth_100.jsonl
-outputs/reports/annotation_summary.json
-```
+```python id="wrvwu6"
+def run_auto_annotation(config):
 
-Required functions:
+    loader = NuScenesLoader(
+        dataroot=config.dataset.dataroot,
+        version=config.dataset.version
+    )
 
-```python
-def save_jsonl(records: list, path: str) -> None:
-    pass
+    gemini_client = build_gemini_client(config)
 
-def load_jsonl(path: str) -> list:
-    pass
+    sample_index = build_or_load_sample_index(
+        loader=loader,
+        config=config
+    )
 
-def append_jsonl(record: dict, path: str) -> None:
-    pass
+    all_candidates = []
 
-def save_json(data: dict, path: str) -> None:
-    pass
+    for sample_record in sample_index:
 
-def load_json(path: str) -> dict:
-    pass
+        preview_paths = create_or_load_previews(
+            sample_record=sample_record,
+            config=config
+        )
+
+        description = describe_scene_with_gemini(
+            sample_record=sample_record,
+            preview_paths=preview_paths,
+            gemini_client=gemini_client,
+            config=config
+        )
+
+        scenario = classify_scenario_with_gemini(
+            sample_record=sample_record,
+            description=description,
+            preview_paths=preview_paths,
+            gemini_client=gemini_client,
+            config=config
+        )
+
+        if scenario.is_relevant is False:
+            continue
+
+        if "not_relevant" in scenario.scenario_clusters:
+            continue
+
+        questions = generate_questions_with_gemini(
+            sample_record=sample_record,
+            description=description,
+            scenario=scenario,
+            preview_paths=preview_paths,
+            gemini_client=gemini_client,
+            config=config
+        )
+
+        labels = []
+
+        for question in questions:
+
+            label = classify_answerability_with_gemini(
+                sample_record=sample_record,
+                description=description,
+                scenario=scenario,
+                question=question,
+                preview_paths=preview_paths,
+                gemini_client=gemini_client,
+                config=config
+            )
+
+            labels.append(label)
+
+        candidates = build_candidate_records(
+            sample_record=sample_record,
+            preview_paths=preview_paths,
+            description=description,
+            scenario=scenario,
+            questions=questions,
+            answerability_labels=labels,
+            model_name=config.gemini.model_name
+        )
+
+        for candidate in candidates:
+            candidate.priority_score = compute_priority(candidate)
+            all_candidates.append(candidate)
+
+        save_jsonl(
+            records=all_candidates,
+            path=config.paths.auto_candidates_path
+        )
+
+    ranked_candidates = sort_candidates_by_priority(all_candidates)
+
+    save_jsonl(
+        records=ranked_candidates,
+        path=config.paths.auto_candidates_path
+    )
 ```
 
 Acceptance criteria:
 
-1. Writing is atomic where possible
+1. Full auto annotation runs on a small nuScenes mini subset
 
-2. GUI progress is not lost if the app crashes
+2. All Gemini calls go through `GeminiClient`
 
-3. JSONL files can be resumed
+3. All outputs are cached
 
-4. Invalid records are logged
+4. Auto candidates are saved incrementally
 
-## Phase 11, Annotation GUI
+5. Pipeline can resume after interruption
+
+6. Pipeline respects maximum call count
+
+## Phase 16, CLI Entry Point
+
+Goal:
+
+All stages should be runnable from one CLI.
+
+File:
+
+```text id="dv122c"
+src/main.py
+```
+
+Use simple command style.
+
+Example commands:
+
+```text id="h8kinu"
+python src/main.py smoke_test configs/nuscenes_mini.yaml
+python src/main.py index configs/nuscenes_mini.yaml
+python src/main.py preview configs/nuscenes_mini.yaml
+python src/main.py gemini_test configs/nuscenes_mini.yaml
+python src/main.py auto_annotate configs/nuscenes_mini.yaml
+python src/main.py rank configs/nuscenes_mini.yaml
+python src/main.py report configs/nuscenes_mini.yaml
+```
+
+Valid stages:
+
+```python id="dxca47"
+STAGES = [
+    "smoke_test",
+    "index",
+    "preview",
+    "gemini_test",
+    "describe",
+    "classify_scenarios",
+    "generate_questions",
+    "classify_answerability",
+    "auto_annotate",
+    "rank",
+    "report"
+]
+```
+
+Acceptance criteria:
+
+1. Every stage can run independently
+
+2. Stages check required input files
+
+3. Stages write expected output files
+
+4. Logs are clear
+
+5. `gemini_test` performs one real Gemini request
+
+## Phase 17, Human Annotation GUI
 
 Goal:
 
 Build a GUI to verify 100 samples.
 
-Recommended first implementation:
+Recommended implementation:
 
 Use Streamlit.
 
 File:
 
-```text
+```text id="hv9uc4"
 src/gui/app.py
 ```
 
 Run command:
 
-```text
+```text id="7sgndk"
 streamlit run src/gui/app.py
 ```
 
 GUI must show:
 
-1. Multi view image grid
+1. Six camera grid
 
 2. Individual selected camera view
 
-3. Sample ID and scene ID
+3. Sample ID
 
-4. Scenario cluster suggestion
+4. Scene token
 
-5. Layered scene description
+5. Gemini layered scene description
 
-6. Candidate question
+6. Gemini scenario classification
 
-7. Auto answerability label
+7. Candidate question
 
-8. Auto ground truth answer
+8. Gemini answerability label
 
-9. Visible evidence
+9. Gemini ground truth answer suggestion
 
-10. Missing evidence
+10. Visible evidence
 
-11. Recommended action
+11. Missing evidence
 
-12. Human correction fields
+12. Recommended action
 
-13. Accept sample button
+13. Human correction fields
 
-14. Reject sample button
+14. Accept button
 
-15. Save progress button
+15. Reject button
+
+16. Save progress button
 
 Human editable fields:
 
-```text
+```text id="c96nvs"
 scenario_cluster
 task_layer
 question
@@ -1150,35 +1662,82 @@ recommended_action
 human_notes
 ```
 
+GUI pseudocode:
+
+```python id="o5rbu8"
+def run_gui(config):
+
+    candidates = load_jsonl(config.paths.auto_candidates_path)
+    verified = load_jsonl_if_exists(config.paths.verified_output_path)
+    rejected = load_jsonl_if_exists(config.paths.rejected_output_path)
+
+    current_candidate = select_next_candidate(
+        candidates=candidates,
+        verified=verified,
+        rejected=rejected
+    )
+
+    display_multiview_grid(current_candidate.preview_paths)
+    display_single_camera_selector(current_candidate.preview_paths)
+    display_gemini_outputs(current_candidate)
+
+    human_label = collect_human_edits(current_candidate)
+
+    if user_clicks_accept:
+        verified_record = merge_candidate_with_human_label(
+            candidate=current_candidate,
+            human_label=human_label
+        )
+
+        verified_record.human_verified = True
+
+        append_jsonl(
+            record=verified_record,
+            path=config.paths.verified_output_path
+        )
+
+    if user_clicks_reject:
+        append_jsonl(
+            record=current_candidate,
+            path=config.paths.rejected_output_path
+        )
+```
+
 Acceptance criteria:
 
-1. User can accept a sample
+1. GUI loads ranked candidates
 
-2. User can reject a sample
+2. GUI displays all camera views
 
-3. User can edit all important fields
+3. GUI displays Gemini suggestions
 
-4. Accepted samples are appended to `ground_truth_100.jsonl`
+4. User can edit all important labels
 
-5. GUI shows count of verified samples
+5. User can accept samples
 
-6. GUI stops when 100 verified samples are reached
+6. User can reject samples
 
-## Phase 12, Report Generation
+7. Accepted samples are appended to `ground_truth_100.jsonl`
+
+8. GUI shows verified count
+
+9. GUI stops when target count is reached
+
+## Phase 18, Report Generation
 
 Goal:
 
-Generate a summary report after annotation.
+Generate a report after annotation.
 
 File:
 
-```text
+```text id="k70ne9"
 src/reporting.py
 ```
 
-Output:
+Outputs:
 
-```text
+```text id="zh7dum"
 outputs/reports/annotation_summary.json
 outputs/reports/annotation_summary.md
 ```
@@ -1187,180 +1746,268 @@ Report must include:
 
 1. Number of indexed samples
 
-2. Number of candidate samples
+2. Number of Gemini processed samples
 
-3. Number of verified samples
+3. Number of candidate samples
 
-4. Scenario cluster distribution
+4. Number of verified samples
 
-5. Answerability distribution
+5. Number of rejected samples
 
-6. Safety action distribution
+6. Scenario cluster distribution
 
-7. Rejected sample count
+7. Answerability distribution
 
-8. Missing evidence type distribution
+8. Safety action distribution
 
-9. Example records per cluster
+9. Uncertainty source distribution
+
+10. Example verified records per cluster
 
 Acceptance criteria:
 
-1. Report is generated automatically after GUI save
+1. Report runs after GUI verification
 
 2. Report is readable in Markdown
 
 3. Report can be included in thesis documentation
 
-## Phase 13, CLI Entry Point
+## Phase 19, Tests
 
 Goal:
 
-All phases should be runnable from one CLI.
+Add tests for parts that do not require real Gemini calls.
 
-File:
+No Gemini mock client should be used.
 
-```text
-src/main.py
-```
-
-Example commands:
-
-```text
-python src/main.py --config configs/nuscenes_mini.yaml --stage index
-python src/main.py --config configs/nuscenes_mini.yaml --stage preview
-python src/main.py --config configs/nuscenes_mini.yaml --stage auto_annotate
-python src/main.py --config configs/nuscenes_mini.yaml --stage rank
-python src/main.py --config configs/nuscenes_mini.yaml --stage report
-```
-
-Valid stages:
-
-```python
-STAGES = [
-    "smoke_test",
-    "index",
-    "preview",
-    "describe",
-    "classify_scenarios",
-    "generate_questions",
-    "classify_answerability",
-    "rank",
-    "auto_annotate",
-    "report"
-]
-```
-
-Acceptance criteria:
-
-1. Every stage can run independently
-
-2. Each stage checks whether required input files exist
-
-3. Each stage writes its output file
-
-4. CLI logs progress clearly
-
-## Phase 14, Tests
-
-Goal:
-
-Add basic tests so Copilot generated code does not silently break.
+Tests should focus on pure local logic.
 
 Files:
 
-```text
+```text id="z35qt3"
 tests/test_schema.py
-tests/test_candidate_ranker.py
 tests/test_storage.py
+tests/test_candidate_ranker.py
+tests/test_cache_key.py
 ```
 
 Required tests:
 
-1. Candidate record can serialize and deserialize
+1. Candidate record serialization works
 
 2. Invalid answerability label raises error
 
-3. Priority score is higher for unanswerable safety critical samples
+3. Invalid safety action raises error
 
 4. JSONL save and load works
 
-5. Duplicate candidate filtering works
+5. Same cache input produces same key
+
+6. Different prompt version produces different key
+
+7. Candidate priority is higher for unanswerable safety critical samples
 
 Acceptance criteria:
 
-1. `pytest` runs successfully
+1. Local tests pass without Gemini
 
-2. Tests do not require full nuScenes dataset
+2. Tests do not call external APIs
 
-3. Tests use small mock records
+3. Tests use small hardcoded records
 
-## Implementation Order For Copilot
+Note:
 
-Implement in this exact order.
+This does not violate the no mock requirement because these tests do not pretend to be Gemini. They only test local validation logic.
 
-### Milestone 1, Minimal nuScenes Access
+## Implementation Milestones
 
-Files:
+### Milestone 1, Foundation
 
-```text
-requirements.txt
-configs/nuscenes_mini.yaml
-src/nuscenes_loader.py
-src/main.py
-```
+Implement:
 
-Goal:
-
-Load nuScenes mini and print sample statistics.
-
-### Milestone 2, Index and Preview
-
-Files:
-
-```text
-src/scene_indexer.py
-src/image_exporter.py
+```text id="ir6wu0"
+src/config.py
 src/storage.py
-```
-
-Goal:
-
-Create JSONL index and preview images.
-
-### Milestone 3, Data Schema
-
-Files:
-
-```text
 src/schema.py
-tests/test_schema.py
+src/nuscenes_loader.py
+src/scene_indexer.py
 ```
 
 Goal:
 
-Create strict data models.
+Load nuScenes and create sample index.
 
-### Milestone 4, Rule Based Auto Annotation
+Definition of done:
 
-Files:
+1. nuScenes mini loads
 
-```text
-src/layered_descriptor.py
-src/scenario_classifier.py
-src/question_generator.py
-src/answerability_classifier.py
+2. Sample index is written
+
+3. Records validate
+
+### Milestone 2, Image Preparation
+
+Implement:
+
+```text id="mkdivi"
+src/image_exporter.py
+src/utils/image_utils.py
+```
+
+Goal:
+
+Create preview images and six camera grid.
+
+Definition of done:
+
+1. Preview images exist
+
+2. Grid image exists
+
+3. Paths are stored
+
+### Milestone 3, Gemini Core
+
+Implement:
+
+```text id="de7q7i"
+src/llm/gemini_client.py
+src/llm/prompt_cache.py
+src/llm/rate_limiter.py
+src/llm/retry.py
+src/llm/image_payload.py
+```
+
+Goal:
+
+Make one real Gemini call with one or more nuScenes images and receive structured JSON.
+
+Definition of done:
+
+1. API key loads from environment
+
+2. One image request works
+
+3. Multiple image request works
+
+4. JSON schema validation works
+
+5. Cache works
+
+6. Maximum call limit works
+
+### Milestone 4, Gemini Scene Description
+
+Implement:
+
+```text id="hpp92y"
+src/prompts/layered_scene_prompt.py
+src/annotator/layered_descriptor.py
+```
+
+Goal:
+
+Generate structured scene descriptions.
+
+Definition of done:
+
+1. Description JSON validates
+
+2. Output is cached
+
+3. Output is saved
+
+### Milestone 5, Gemini Scenario Classification
+
+Implement:
+
+```text id="s44xuy"
+src/prompts/scenario_prompt.py
+src/annotator/scenario_classifier.py
+```
+
+Goal:
+
+Classify thesis relevant scenarios.
+
+Definition of done:
+
+1. Relevant and not relevant samples are classified
+
+2. Scenario clusters validate
+
+3. Reason string is not empty
+
+### Milestone 6, Gemini Question Generation
+
+Implement:
+
+```text id="ytrh7m"
+src/prompts/question_generation_prompt.py
+src/annotator/question_generator.py
+```
+
+Goal:
+
+Generate one to three candidate VQA questions.
+
+Definition of done:
+
+1. Questions are specific
+
+2. Questions validate
+
+3. Duplicates are removed
+
+### Milestone 7, Gemini Answerability Labels
+
+Implement:
+
+```text id="6nfazg"
+src/prompts/answerability_prompt.py
+src/annotator/answerability_classifier.py
+```
+
+Goal:
+
+Generate answerability labels for each question.
+
+Definition of done:
+
+1. Answerability label validates
+
+2. Ground truth answer is not empty
+
+3. Abstention flag matches answerability
+
+4. Safety action validates
+
+### Milestone 8, Candidate Export
+
+Implement:
+
+```text id="1i33dg"
+src/annotator/candidate_builder.py
 src/candidate_ranker.py
 ```
 
 Goal:
 
-Generate candidate records without using a VLM yet.
+Create ranked candidate records.
 
-### Milestone 5, GUI
+Definition of done:
 
-Files:
+1. Candidate JSONL is saved
 
-```text
+2. Candidates are ranked
+
+3. Records include all needed fields
+
+### Milestone 9, GUI
+
+Implement:
+
+```text id="lnrbj1"
 src/gui/app.py
 src/gui/widgets.py
 src/gui/state.py
@@ -1368,13 +2015,25 @@ src/gui/state.py
 
 Goal:
 
-Human can verify and export ground truth samples.
+Human can verify 100 samples.
 
-### Milestone 6, Reporting
+Definition of done:
 
-Files:
+1. GUI displays images
 
-```text
+2. GUI displays Gemini suggestions
+
+3. Human can edit labels
+
+4. Human can accept or reject
+
+5. Verified JSONL is saved
+
+### Milestone 10, Report
+
+Implement:
+
+```text id="7nw28d"
 src/reporting.py
 ```
 
@@ -1382,215 +2041,183 @@ Goal:
 
 Generate annotation summary.
 
-### Milestone 7, Optional VLM Assisted Annotation
+Definition of done:
 
-Files:
+1. Report shows distributions
 
-```text
-src/vlm_client.py
-src/prompts/scene_description_prompts.py
-src/prompts/scenario_prompts.py
-src/prompts/question_prompts.py
-src/prompts/answerability_prompts.py
-```
+2. Report has examples
 
-Goal:
+3. Report is saved as JSON and Markdown
 
-Replace or support rule based labels with VLM generated suggestions.
+## Full Part 1 Pseudocode
 
-## Pseudocode, Full Part 1 Pipeline
+```python id="d1t62h"
+def run_part_1_pipeline(config):
 
-```python
-def run_part_1_annotation_pipeline(config):
+    ensure_output_directories(config)
 
     loader = NuScenesLoader(
-        dataroot=config.dataroot,
-        version=config.version
+        dataroot=config.dataset.dataroot,
+        version=config.dataset.version
     )
 
-    sample_index = build_or_load_sample_index(loader, config)
+    gemini_client = GeminiClient(
+        api_key=load_required_env(config.gemini.api_key_env),
+        model_name=resolve_model_name(config),
+        cache=PromptCache(config.gemini.cache_dir),
+        rate_limiter=RateLimiter(config.gemini.min_seconds_between_calls),
+        config=config.gemini
+    )
 
-    preview_index = build_or_load_previews(sample_index, config)
+    sample_index = build_or_load_sample_index(
+        loader=loader,
+        output_path=config.paths.sample_index_path,
+        max_samples=config.pipeline.max_samples,
+        sample_stride=config.pipeline.sample_stride
+    )
 
-    auto_candidates = []
+    all_candidates = []
 
     for sample_record in sample_index:
 
-        camera_paths = sample_record.camera_paths
-
-        preview_paths = preview_index[sample_record.sample_id]
-
-        scene_description = describe_scene(
+        preview_paths = create_or_load_previews(
             sample_record=sample_record,
-            camera_paths=camera_paths,
-            mode=config.description_mode
+            preview_dir=config.paths.preview_dir,
+            max_side_pixels=config.gemini.max_image_side_pixels
         )
 
-        scenario = classify_scenario(
+        layered_description = describe_scene_with_gemini(
             sample_record=sample_record,
-            description=scene_description,
-            mode=config.scenario_mode
+            preview_paths=preview_paths,
+            gemini_client=gemini_client,
+            config=config
+        )
+
+        scenario = classify_scenario_with_gemini(
+            sample_record=sample_record,
+            description=layered_description,
+            preview_paths=preview_paths,
+            gemini_client=gemini_client,
+            config=config
         )
 
         if scenario.is_relevant is False:
             continue
 
-        questions = generate_questions(
-            description=scene_description,
-            scenario=scenario
+        if "not_relevant" in scenario.scenario_clusters:
+            continue
+
+        questions = generate_questions_with_gemini(
+            sample_record=sample_record,
+            description=layered_description,
+            scenario=scenario,
+            preview_paths=preview_paths,
+            gemini_client=gemini_client,
+            config=config
         )
 
         for question in questions:
 
-            answerability = classify_answerability(
+            answerability = classify_answerability_with_gemini(
                 sample_record=sample_record,
-                description=scene_description,
+                description=layered_description,
                 scenario=scenario,
                 question=question,
-                mode=config.answerability_mode
+                preview_paths=preview_paths,
+                gemini_client=gemini_client,
+                config=config
             )
 
-            candidate = CandidateRecord(
-                sample_id=sample_record.sample_id,
-                scene_token=sample_record.scene_token,
-                camera_paths=camera_paths,
+            candidate = build_candidate_record(
+                sample_record=sample_record,
                 preview_paths=preview_paths,
-                layered_scene_description=scene_description,
-                scenario_classification=scenario,
-                question=question.question,
-                answerability_label=answerability,
-                priority_score=0.0,
-                human_verified=False,
-                human_notes=None
+                description=layered_description,
+                scenario=scenario,
+                question=question,
+                answerability=answerability,
+                model_name=gemini_client.model_name
             )
 
             candidate.priority_score = compute_priority(candidate)
 
-            auto_candidates.append(candidate)
+            all_candidates.append(candidate)
 
-    ranked_candidates = rank_candidates(auto_candidates)
+            save_jsonl(
+                records=sort_candidates_by_priority(all_candidates),
+                path=config.paths.auto_candidates_path
+            )
 
-    save_jsonl(
-        ranked_candidates,
-        config.auto_candidates_path
+    generate_annotation_report_from_candidates(
+        candidates=all_candidates,
+        output_dir=config.paths.report_dir
     )
 
     print("Auto annotation finished.")
     print("Open the GUI to verify 100 samples.")
 ```
 
-## Pseudocode, GUI Verification
-
-```python
-def run_annotation_gui(config):
-
-    candidates = load_jsonl(config.auto_candidates_path)
-
-    verified_samples = load_jsonl_if_exists(
-        config.verified_output_path
-    )
-
-    while len(verified_samples) < config.target_verified_count:
-
-        candidate = select_next_candidate(candidates, verified_samples)
-
-        display_multiview_images(candidate.preview_paths)
-
-        display_candidate_metadata(candidate)
-
-        human_label = collect_human_input(
-            default_values=candidate
-        )
-
-        if human_label.accept_sample:
-
-            verified_sample = merge_candidate_with_human_label(
-                candidate,
-                human_label
-            )
-
-            verified_sample.human_verified = True
-
-            append_jsonl(
-                verified_sample,
-                config.verified_output_path
-            )
-
-            verified_samples.append(verified_sample)
-
-        else:
-
-            save_rejected_sample(candidate, human_label)
-
-    generate_annotation_report(
-        verified_samples,
-        output_dir=config.report_dir
-    )
-```
-
-## Config Example
-
-```yaml
-dataset:
-  name: nuscenes
-  dataroot: /data/sets/nuscenes
-  version: v1.0-mini
-
-pipeline:
-  max_samples: 500
-  sample_stride: 1
-  target_verified_count: 100
-  description_mode: metadata_only
-  scenario_mode: rule_based
-  answerability_mode: rule_based
-
-paths:
-  sample_index_path: outputs/cache/nuscenes_sample_index.jsonl
-  preview_dir: outputs/cache/previews
-  auto_candidates_path: outputs/candidates/auto_candidates.jsonl
-  verified_output_path: outputs/verified/ground_truth_100.jsonl
-  rejected_output_path: outputs/verified/rejected_samples.jsonl
-  report_dir: outputs/reports
-
-gui:
-  default_camera: CAM_FRONT
-  show_multiview_grid: true
-```
-
-## Definition of Done For Part 1
+## Definition Of Done For Part 1
 
 Part 1 is complete when:
 
-1. The repository can load nuScenes mini
+1. nuScenes mini can be loaded
 
-2. The pipeline can index samples
+2. Camera previews can be generated
 
-3. The pipeline can create candidate records
+3. Gemini client can process nuScenes images
 
-4. The pipeline can classify scenario clusters
+4. Layered scene descriptions are generated by Gemini
 
-5. The pipeline can generate candidate VQA questions
+5. Scenario clusters are generated by Gemini
 
-6. The pipeline can propose answerability labels
+6. Candidate questions are generated by Gemini
 
-7. The GUI can show candidate samples
+7. Answerability labels are generated by Gemini
 
-8. The human can edit and accept samples
+8. Candidate records are ranked and saved
 
-9. The final file `ground_truth_100.jsonl` contains 100 verified samples
+9. GUI can display and correct candidates
 
-10. The annotation summary report is generated
+10. `ground_truth_100.jsonl` contains 100 human verified samples
 
-## What Not To Implement Yet
+11. Annotation summary report is generated
 
-Do not implement Part 2 yet.
+## What Not To Implement In Part 1
 
-Do not implement model benchmarking yet.
+Do not implement Part 2 VQA evaluation yet.
 
-Do not implement ECE, Brier Score, or risk coverage yet.
+Do not implement ECE yet.
+
+Do not implement Brier Score yet.
+
+Do not implement risk coverage curves yet.
 
 Do not implement LoRA fine tuning yet.
 
-Do not over optimize the VLM prompting yet.
+Do not implement benchmarking across Qwen, LLaVA, InternVL, or other VLMs yet.
 
-Part 1 only needs to create the verified data used later by the VQA pipeline.
+Do not treat Gemini labels as final truth.
+
+Human verification is required.
+
+## Important Quality Rules
+
+1. Every Gemini output must be structured JSON
+
+2. Every Gemini output must be validated
+
+3. Every Gemini output must be cached
+
+4. Every candidate must be human editable
+
+5. Every accepted sample must have a clear question
+
+6. Every accepted sample must have a clear ground truth answer
+
+7. Every accepted sample must state whether abstention is required
+
+8. Every accepted sample must include visible evidence and missing evidence
+
+9. Every accepted sample must include recommended safety action
+
+10. The pipeline must be resumable after interruption

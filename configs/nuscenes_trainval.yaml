@@ -1,0 +1,39 @@
+dataset:
+  name: nuscenes
+  dataroot: C:/datasets/nuscenes
+  version: v1.0-trainval
+
+pipeline:
+  max_samples: 1000
+  sample_stride: 1
+  target_verified_count: 100
+  max_questions_per_sample: 3
+  max_candidates_for_gui: 300
+
+gemini:
+  api_key_env: GEMINI_API_KEY
+  model_name_env: GEMINI_MODEL_NAME
+  default_model_name: gemini-2.5-flash
+  max_calls_per_run: 200
+  request_timeout_seconds: 60
+  max_retries: 3
+  retry_backoff_seconds: 5
+  min_seconds_between_calls: 1.0
+  cache_enabled: true
+  cache_dir: outputs/cache/llm
+  use_structured_output: true
+  image_input_mode: inline
+  max_images_per_request: 6
+  max_image_side_pixels: 1280
+
+paths:
+  sample_index_path: outputs/cache/nuscenes_sample_index.jsonl
+  preview_dir: outputs/cache/previews
+  auto_candidates_path: outputs/candidates/auto_candidates.jsonl
+  verified_output_path: outputs/verified/ground_truth_100.jsonl
+  rejected_output_path: outputs/verified/rejected_samples.jsonl
+  report_dir: outputs/reports
+
+gui:
+  default_camera: CAM_FRONT
+  show_multiview_grid: true

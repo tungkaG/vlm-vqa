@@ -1,0 +1,20 @@
+# Core
+pydantic>=2.6,<3
+PyYAML>=6.0
+python-dotenv>=1.0
+
+# Gemini (new unified Google GenAI SDK)
+google-genai>=1.0.0
+
+# Imaging
+Pillow>=10.0
+numpy>=1.26,<2.1
+
+# nuScenes devkit (provides the `nuscenes` package)
+nuscenes-devkit>=1.1.11
+
+# Human-verification GUI
+streamlit>=1.30
+
+# Testing
+pytest>=8.0
