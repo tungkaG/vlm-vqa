@@ -21,12 +21,27 @@ _GRID_LAYOUT = [
 ]
 
 
+def width_kwargs() -> dict:
+    """Kwargs to make an element fill its container, across Streamlit versions.
+
+    Streamlit 1.42 replaced ``use_container_width=True`` with
+    ``width="stretch"`` and deprecated the old parameter.
+    """
+    version = getattr(st, "__version__", "0.0.0")
+    try:
+        major, minor = (int(part) for part in version.split(".")[:2])
+    except ValueError:
+        return {"use_container_width": True}
+    return {"width": "stretch"} if (major, minor) >= (1, 42) else {"use_container_width": True}
+
+
 def _image(path: str, caption: str) -> None:
     """Display an image, tolerating Streamlit version parameter changes."""
     try:
-        st.image(path, caption=caption, use_container_width=True)
-    except TypeError:  # older Streamlit
+        st.image(path, caption=caption, **width_kwargs())
+    except TypeError:  # very old Streamlit
         st.image(path, caption=caption, use_column_width=True)
+
 
 
 def _exists(path: Optional[str]) -> bool:
@@ -54,15 +69,22 @@ def show_multiview_grid(
                     st.caption(f"{camera}: (missing)")
 
 
-def show_single_camera(preview_paths: Dict[str, Optional[str]]) -> None:
-    """Show a selectable single-camera view."""
+def show_single_camera(
+    preview_paths: Dict[str, Optional[str]], key_suffix: str = ""
+) -> None:
+    """Show a selectable single-camera view.
+
+    ``key_suffix`` should be unique per sample so the camera choice does
+    not leak across candidates while navigating.
+    """
     st.subheader("Single camera")
     available = [c for c in CAMERA_NAMES if _exists(preview_paths.get(c))]
     if not available:
         st.caption("No camera previews available.")
         return
-    selected = st.selectbox("Camera", available, key="single_camera")
+    selected = st.selectbox("Camera", available, key=f"single_camera_{key_suffix}")
     _image(preview_paths[selected], selected)
+
 
 
 def show_gemini_outputs(candidate: CandidateRecord) -> None:

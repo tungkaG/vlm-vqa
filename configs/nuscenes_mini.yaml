@@ -28,7 +28,7 @@ gemini:
   # Mock mode returns canned (schema-valid) JSON instead of calling the API,
   # so the pipeline runs with no API key. Set to false once you have a real
   # GEMINI_API_KEY to make real Gemini calls (the call path is identical).
-  mock_mode: true
+  mock_mode: false
 
 paths:
   sample_index_path: outputs/cache/nuscenes_sample_index.jsonl

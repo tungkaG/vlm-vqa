@@ -48,12 +48,24 @@ def load_candidates(config: AppConfig) -> List[CandidateRecord]:
 
 def load_processed_keys(config: AppConfig) -> Set[Tuple[str, str]]:
     """Return the keys of every already verified or rejected candidate."""
-    processed: Set[Tuple[str, str]] = set()
-    for row in load_jsonl_if_exists(config.paths.verified_output_path):
-        processed.add(candidate_key(row))
-    for row in load_jsonl_if_exists(config.paths.rejected_output_path):
-        processed.add(candidate_key(row))
-    return processed
+    verified, rejected = load_status_keys(config)
+    return verified | rejected
+
+
+def load_status_keys(
+    config: AppConfig,
+) -> Tuple[Set[Tuple[str, str]], Set[Tuple[str, str]]]:
+    """Return (verified_keys, rejected_keys) as separate sets."""
+    verified = {
+        candidate_key(row)
+        for row in load_jsonl_if_exists(config.paths.verified_output_path)
+    }
+    rejected = {
+        candidate_key(row)
+        for row in load_jsonl_if_exists(config.paths.rejected_output_path)
+    }
+    return verified, rejected
+
 
 
 def count_verified(config: AppConfig) -> int:
