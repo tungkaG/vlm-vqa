@@ -80,14 +80,14 @@ def cmd_smoke_test(config: AppConfig) -> None:
     if not Path(config.dataset.dataroot).is_dir():
         logger.warning("Dataroot does not exist yet (download nuScenes to use it).")
 
-    logger.info("Resolved Gemini model: %s", resolve_model_name(config))
-    api_key = get_optional_env(config.gemini.api_key_env)
+    logger.info("Resolved LLM model: %s (provider=%s)", resolve_model_name(config), config.llm.provider)
+    api_key = get_optional_env(config.llm.api_key_env)
     if api_key:
-        logger.info("Gemini API key found in env '%s'.", config.gemini.api_key_env)
+        logger.info("API key found in env '%s'.", config.llm.api_key_env)
     else:
         logger.warning(
-            "Gemini API key NOT set (env '%s'). gemini_test will fail until it is.",
-            config.gemini.api_key_env,
+            "API key NOT set (env '%s'). llm_test will fail until it is.",
+            config.llm.api_key_env,
         )
 
     logger.info("Output directories are ready.")
@@ -129,7 +129,7 @@ def cmd_preview(config: AppConfig) -> None:
         previews = create_camera_previews(
             camera_paths=record.camera_paths,
             output_dir=config.paths.preview_dir,
-            max_side_pixels=config.gemini.max_image_side_pixels,
+            max_side_pixels=config.llm.max_image_side_pixels,
         )
         if config.gui.show_multiview_grid:
             create_multiview_grid(
@@ -140,9 +140,9 @@ def cmd_preview(config: AppConfig) -> None:
 
 
 def cmd_gemini_test(config: AppConfig) -> None:
-    """Perform one real Gemini JSON call and demonstrate caching."""
-    from llm.gemini_client import build_gemini_client
-    from scene_indexer import load_sample_index
+    """Perform one LLM JSON call and demonstrate caching."""
+    from llm.factory import build_llm_client as build_gemini_client
+    from scene_indexer import load_sample_index  # noqa: F401  (kept for compat)
 
     client = build_gemini_client(config)
 
@@ -184,7 +184,7 @@ def _find_one_preview_or_synthesize(config: AppConfig) -> str:
         for candidate in preview_dir.glob("CAM_*.jpg"):
             return str(candidate)
 
-    synth_dir = Path(config.gemini.cache_dir).parent / "previews"
+    synth_dir = Path(config.llm.cache_dir).parent / "previews"
     synth_dir.mkdir(parents=True, exist_ok=True)
     synth_path = synth_dir / "gemini_test_synthetic.jpg"
     if not synth_path.exists():
@@ -215,7 +215,7 @@ def create_or_load_previews(sample_record, config: AppConfig) -> dict:
     return create_camera_previews(
         camera_paths=sample_record.camera_paths,
         output_dir=config.paths.preview_dir,
-        max_side_pixels=config.gemini.max_image_side_pixels,
+        max_side_pixels=config.llm.max_image_side_pixels,
     )
 
 
@@ -273,7 +273,7 @@ def _labels_sample(record, client, config):
 
 def cmd_describe(config: AppConfig) -> None:
     """Generate a layered scene description for every indexed sample."""
-    from llm.gemini_client import build_gemini_client
+    from llm.factory import build_llm_client as build_gemini_client
     from storage import save_jsonl
 
     client = build_gemini_client(config)
@@ -298,7 +298,7 @@ def cmd_describe(config: AppConfig) -> None:
 
 def cmd_classify_scenarios(config: AppConfig) -> None:
     """Classify the scenario for every indexed sample."""
-    from llm.gemini_client import build_gemini_client
+    from llm.factory import build_llm_client as build_gemini_client
     from storage import save_jsonl
 
     client = build_gemini_client(config)
@@ -327,7 +327,7 @@ def cmd_classify_scenarios(config: AppConfig) -> None:
 
 def cmd_generate_questions(config: AppConfig) -> None:
     """Generate candidate questions for every relevant sample."""
-    from llm.gemini_client import build_gemini_client
+    from llm.factory import build_llm_client as build_gemini_client
     from storage import save_jsonl
 
     client = build_gemini_client(config)
@@ -360,7 +360,7 @@ def cmd_generate_questions(config: AppConfig) -> None:
 
 def cmd_classify_answerability(config: AppConfig) -> None:
     """Label answerability for every generated question."""
-    from llm.gemini_client import build_gemini_client
+    from llm.factory import build_llm_client as build_gemini_client
     from storage import save_jsonl
 
     client = build_gemini_client(config)
@@ -392,7 +392,7 @@ def cmd_auto_annotate(config: AppConfig) -> None:
     """Run the full auto-annotation pipeline and rank the candidates."""
     from annotator.candidate_builder import build_candidate_records
     from candidate_ranker import compute_priority, rank_candidates
-    from llm.gemini_client import build_gemini_client
+    from llm.factory import build_llm_client as build_gemini_client
     from llm.gemini_types import MaxCallsExceededError
     from storage import save_jsonl
 

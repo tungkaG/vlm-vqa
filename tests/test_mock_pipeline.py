@@ -22,7 +22,7 @@ def _mock_client(config: AppConfig):
         model_name="gemini-2.5-flash",
         cache=None,
         rate_limiter=RateLimiter(0.0),
-        config=config.gemini,
+        config=config.llm,
     )
 
 

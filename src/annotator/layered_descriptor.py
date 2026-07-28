@@ -15,7 +15,7 @@ def describe_scene_with_gemini(
 ) -> LayeredSceneDescription:
     """Ask Gemini for a layered semantic description of one sample."""
     image_paths = select_image_paths(
-        preview_paths, config.gemini.max_images_per_request
+        preview_paths, config.llm.max_images_per_request
     )
     prompt = layered_scene_prompt.build_prompt(sample_record)
     cache_key = build_cache_key(

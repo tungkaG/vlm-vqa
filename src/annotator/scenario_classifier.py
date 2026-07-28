@@ -18,7 +18,7 @@ def classify_scenario_with_gemini(
 ) -> ScenarioClassification:
     """Classify a sample's relevance and scenario clusters."""
     image_paths = select_image_paths(
-        preview_paths, config.gemini.max_images_per_request
+        preview_paths, config.llm.max_images_per_request
     )
     prompt = scenario_prompt.build_prompt(sample_record, description)
     cache_key = build_cache_key(

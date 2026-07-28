@@ -31,7 +31,7 @@ def generate_questions_with_gemini(
 ) -> List[CandidateQuestion]:
     """Generate one to three deduplicated candidate questions."""
     image_paths = select_image_paths(
-        preview_paths, config.gemini.max_images_per_request
+        preview_paths, config.llm.max_images_per_request
     )
     prompt = question_generation_prompt.build_prompt(
         sample_record, description, scenario

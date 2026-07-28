@@ -19,7 +19,7 @@ import json
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from llm.gemini_client import BaseGeminiClient
+from llm.base_client import BaseLLMClient
 from utils.hash_utils import short_hash
 from utils.logging_utils import get_logger
 
@@ -409,7 +409,7 @@ def _build_answerability(archetype: dict, prompt: str) -> dict:
     }
 
 
-class MockGeminiClient(BaseGeminiClient):
+class MockGeminiClient(BaseLLMClient):
     """Mock client returning schema-conforming canned JSON (no API calls)."""
 
     client_kind = "mock"

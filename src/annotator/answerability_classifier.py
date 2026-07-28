@@ -26,7 +26,7 @@ def classify_answerability_with_gemini(
 ) -> AnswerabilityLabel:
     """Propose the ground-truth answerability label for one question."""
     image_paths = select_image_paths(
-        preview_paths, config.gemini.max_images_per_request
+        preview_paths, config.llm.max_images_per_request
     )
     prompt = answerability_prompt.build_prompt(
         sample_record, description, scenario, question

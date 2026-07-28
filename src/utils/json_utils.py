@@ -1,15 +1,21 @@
 """JSON parsing and lightweight schema-validation helpers.
 
 `parse_json_lenient` tolerates Markdown code fences that language models
-sometimes wrap around JSON. `validate_json_schema` implements a tiny,
-dependency-free subset of JSON Schema (type + required) so the Gemini
-client can validate responses without pulling in `jsonschema`.
+sometimes wrap around JSON. `coerce_json_to_schema` strips invalid enum
+items from arrays (with a warning) so one hallucinated string does not
+abort the whole pipeline. `validate_json_schema` implements a tiny,
+dependency-free subset of JSON Schema (type + required) and raises only
+for structural violations.
 """
 
 from __future__ import annotations
 
 import json
 from typing import Any, Dict
+
+from utils.logging_utils import get_logger
+
+logger = get_logger(__name__)
 
 _JSON_TYPES = {
     "object": dict,
@@ -63,6 +69,54 @@ def _extract_first_json_block(text: str) -> str | None:
                         return text[index : end + 1]
             return None
     return None
+
+
+def coerce_json_to_schema(data: Any, schema: Dict[str, Any] | None) -> Any:
+    """Return a copy of *data* with invalid enum items stripped from arrays.
+
+    When a model returns ``'ambiguous_intent_unknown'`` in a field whose
+    schema restricts items to a fixed enum, the bad item is dropped with a
+    warning instead of crashing the call.  Structural problems (wrong type,
+    missing required key) are left for :func:`validate_json_schema`.
+    """
+    if not schema or not isinstance(data, (dict, list)):
+        return data
+    return _coerce_node(data, schema)
+
+
+def _coerce_node(data: Any, schema: Dict[str, Any]) -> Any:
+    expected_type = schema.get("type")
+
+    if expected_type == "object" or "properties" in schema:
+        if not isinstance(data, dict):
+            return data
+        result = dict(data)
+        for key, subschema in schema.get("properties", {}).items():
+            if key in result:
+                result[key] = _coerce_node(result[key], subschema)
+        return result
+
+    if expected_type == "array" and "items" in schema:
+        if not isinstance(data, list):
+            return data
+        item_schema = schema["items"]
+        allowed = item_schema.get("enum")
+        if allowed is not None:
+            filtered = []
+            for item in data:
+                if item in allowed:
+                    filtered.append(item)
+                else:
+                    logger.warning(
+                        "Dropping invalid enum value %r from response "
+                        "(allowed: %s)",
+                        item,
+                        allowed,
+                    )
+            return filtered
+        return [_coerce_node(item, item_schema) for item in data]
+
+    return data
 
 
 def validate_json_schema(data: Any, schema: Dict[str, Any] | None) -> None:

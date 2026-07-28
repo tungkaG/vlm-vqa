@@ -10,24 +10,25 @@ pipeline:
   max_questions_per_sample: 3
   max_candidates_for_gui: 300
 
-gemini:
-  api_key_env: GEMINI_API_KEY
-  model_name_env: GEMINI_MODEL_NAME
-  default_model_name: gemini-2.5-flash
-  max_calls_per_run: 50
-  request_timeout_seconds: 60
+llm:
+  provider: nvidia
+  base_url: https://integrate.api.nvidia.com/v1
+  api_key_env: NVIDIA_API_KEY
+  model_name_env: LLM_MODEL_NAME
+  default_model_name: nvidia/nemotron-3-nano-omni-30b-a3b-reasoning
+  max_calls_per_run: 600
+  request_timeout_seconds: 120
   max_retries: 3
-  retry_backoff_seconds: 5
+  retry_backoff_seconds: 5.0
   min_seconds_between_calls: 1.0
   cache_enabled: true
   cache_dir: outputs/cache/llm
-  use_structured_output: true
+  max_output_tokens: 4096
+  use_structured_output: false
   image_input_mode: inline
-  max_images_per_request: 6
-  max_image_side_pixels: 1280
-  # Mock mode returns canned (schema-valid) JSON instead of calling the API,
-  # so the pipeline runs with no API key. Set to false once you have a real
-  # GEMINI_API_KEY to make real Gemini calls (the call path is identical).
+  # Reduced from 6 to avoid large inline base64 payload rejections.
+  max_images_per_request: 2
+  max_image_side_pixels: 640
   mock_mode: false
 
 paths:

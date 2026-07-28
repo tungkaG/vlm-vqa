@@ -1,6 +1,6 @@
-"""Configuration loading and validation (Phase 0).
+"""Configuration loading and validation.
 
-Loads a YAML config into validated Pydantic models, reads the Gemini API
+Loads a YAML config into validated Pydantic models, reads the LLM API
 key from the environment (failing clearly if absent), resolves the model
 name from an optional environment override, and creates output folders.
 """
@@ -34,24 +34,33 @@ class PipelineConfig(BaseModel):
     max_candidates_for_gui: int = 300
 
 
-class GeminiConfig(BaseModel):
-    api_key_env: str = "GEMINI_API_KEY"
-    model_name_env: str = "GEMINI_MODEL_NAME"
-    default_model_name: str = "gemini-2.5-flash"
+class LLMConfig(BaseModel):
+    # Provider: 'nvidia' (default), 'gemini', or 'mock'.
+    provider: str = "nvidia"
+    # NVIDIA NIM endpoint; ignored when provider is 'gemini'.
+    base_url: str = "https://integrate.api.nvidia.com/v1"
+    api_key_env: str = "NVIDIA_API_KEY"
+    model_name_env: str = "LLM_MODEL_NAME"
+    default_model_name: str = "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning"
     max_calls_per_run: int = 50
-    request_timeout_seconds: int = 60
+    request_timeout_seconds: int = 120
     max_retries: int = 3
     retry_backoff_seconds: float = 5.0
     min_seconds_between_calls: float = 1.0
     cache_enabled: bool = True
     cache_dir: str = "outputs/cache/llm"
-    use_structured_output: bool = True
+    # Max tokens in the model's completion (not prompt).
+    max_output_tokens: int = 4096
+    use_structured_output: bool = False
     image_input_mode: str = "inline"
     max_images_per_request: int = 6
     max_image_side_pixels: int = 1280
-    # When true (or env GEMINI_MOCK is set), use a mock client that
-    # returns schema-conforming canned JSON instead of calling the API.
+    # When true (or env LLM_MOCK / GEMINI_MOCK is set), use the mock client.
     mock_mode: bool = False
+
+
+# Legacy alias so any external code referencing GeminiConfig keeps working.
+GeminiConfig = LLMConfig
 
 
 class PathsConfig(BaseModel):
@@ -71,9 +80,14 @@ class GuiConfig(BaseModel):
 class AppConfig(BaseModel):
     dataset: DatasetConfig
     pipeline: PipelineConfig = Field(default_factory=PipelineConfig)
-    gemini: GeminiConfig = Field(default_factory=GeminiConfig)
+    llm: LLMConfig = Field(default_factory=LLMConfig)
     paths: PathsConfig = Field(default_factory=PathsConfig)
     gui: GuiConfig = Field(default_factory=GuiConfig)
+
+    @property
+    def gemini(self) -> LLMConfig:
+        """Back-compat alias: ``config.gemini`` maps to ``config.llm``."""
+        return self.llm
 
 
 def load_config(path: str | Path) -> AppConfig:
@@ -99,7 +113,7 @@ def load_config(path: str | Path) -> AppConfig:
 def ensure_output_directories(config: AppConfig) -> None:
     """Create every output directory referenced by the config."""
     directories = [
-        config.gemini.cache_dir,
+        config.llm.cache_dir,
         config.paths.preview_dir,
         config.paths.report_dir,
         Path(config.paths.sample_index_path).parent,
@@ -112,11 +126,11 @@ def ensure_output_directories(config: AppConfig) -> None:
 
 
 def resolve_model_name(config: AppConfig) -> str:
-    """Return the Gemini model name, preferring the env override."""
-    env_value = os.environ.get(config.gemini.model_name_env)
+    """Return the LLM model name, preferring the env override."""
+    env_value = os.environ.get(config.llm.model_name_env)
     if env_value:
         return env_value
-    return config.gemini.default_model_name
+    return config.llm.default_model_name
 
 
 def load_required_env(var_name: str) -> str:
@@ -130,9 +144,13 @@ def load_required_env(var_name: str) -> str:
     return value
 
 
-def get_gemini_api_key(config: AppConfig) -> str:
-    """Return the Gemini API key from the configured environment variable."""
-    return load_required_env(config.gemini.api_key_env)
+def get_llm_api_key(config: AppConfig) -> str:
+    """Return the LLM API key from the configured environment variable."""
+    return load_required_env(config.llm.api_key_env)
+
+
+# Legacy alias.
+get_gemini_api_key = get_llm_api_key
 
 
 def get_optional_env(var_name: str) -> Optional[str]:

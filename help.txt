@@ -1,0 +1,17 @@
+# 1. Build the sample index (reads nuScenes from C:/datasets/nuscenes)
+.\.venv\Scripts\python.exe src/main.py index configs/nuscenes_mini.yaml
+
+# 2. Generate camera previews (needed before any LLM stage)
+.\.venv\Scripts\python.exe src/main.py preview configs/nuscenes_mini.yaml
+
+# 3. Test one live LLM call (verifies your API key + caching work)
+.\.venv\Scripts\python.exe src/main.py gemini_test configs/nuscenes_mini.yaml
+
+# 4. Full auto-annotation pipeline (describe → classify → questions → answerability)
+.\.venv\Scripts\python.exe src/main.py auto_annotate configs/nuscenes_mini.yaml
+
+# 5. Generate report
+.\.venv\Scripts\python.exe src/main.py report configs/nuscenes_mini.yaml
+
+# 6. GUI
+.\.venv\Scripts\python.exe -m streamlit run src/gui/app.py -- --config configs/nuscenes_mini.yaml
